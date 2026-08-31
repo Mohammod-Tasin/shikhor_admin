@@ -50,6 +50,6 @@ check on `/api/auth/login`.
 The admin form now uploads image files, but the Go backend needs a matching route:
 
 - `POST /api/admin/events/upload` under the existing `/api/admin` group (already gated by `RequireAccessToken` + `RequireAdmin`).
-- Parse `multipart/form-data`, read the `file` part, validate it is an image within a size cap.
+- Parse `multipart/form-data`, read the `file` part, validate it is an image within a size cap (client allows up to 100 MB; ensure the server's max request/body size and any proxy limit match).
 - Persist it (object storage / disk / CDN) and respond `200 { "image_url": "<public URL>" }`.
 - Add `multipart/form-data` handling; CORS already allows the `Authorization` header on this origin.

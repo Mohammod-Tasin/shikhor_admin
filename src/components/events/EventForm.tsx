@@ -22,7 +22,7 @@ interface FieldErrors {
   image?: string;
 }
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 100 * 1024 * 1024;
 
 export function EventForm({ event, onSuccess }: EventFormProps) {
   const isEditing = Boolean(event);
@@ -71,7 +71,7 @@ export function EventForm({ event, onSuccess }: EventFormProps) {
     }
     if (file && file.size > MAX_IMAGE_BYTES) {
       setImageFile(null);
-      setFieldErrors((prev) => ({ ...prev, image: "Image must be 5 MB or smaller." }));
+      setFieldErrors((prev) => ({ ...prev, image: "Image must be 100 MB or smaller." }));
       return;
     }
     setImageFile(file);
@@ -206,7 +206,7 @@ export function EventForm({ event, onSuccess }: EventFormProps) {
               ? "New image selected — it will be uploaded when you save."
               : existingImageUrl
                 ? "Leave empty to keep the current image."
-                : "PNG or JPG, up to 5 MB. Optional."}
+                : "PNG or JPG, up to 100 MB. Optional."}
           </p>
         )}
 
