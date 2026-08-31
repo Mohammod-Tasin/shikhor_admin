@@ -56,15 +56,25 @@ interface FetchOptions {
   /** Skip attaching the access token and skip 401 retry — for endpoints
    * that run before a session exists (login, refresh, logout). */
   skipAuth?: boolean;
+  /** Override the default request timeout (e.g. for file uploads). */
+  timeoutMs?: number;
 }
 
 const REQUEST_TIMEOUT_MS = 12_000;
+const UPLOAD_TIMEOUT_MS = 45_000;
 
 async function doFetch(path: string, options: FetchOptions, token: string | null): Promise<Response> {
   const deviceFingerprint = await getDeviceFingerprint();
 
+  // A FormData body is sent as multipart so the browser can set the
+  // Content-Type header (with its boundary) itself — we must not set it.
+  const isMultipart = options.body instanceof FormData;
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    options.timeoutMs ?? (isMultipart ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS),
+  );
 
   try {
     return await fetch(`${API_URL}${path}`, {
@@ -72,11 +82,15 @@ async function doFetch(path: string, options: FetchOptions, token: string | null
       credentials: "include",
       signal: controller.signal,
       headers: {
-        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(options.body && !isMultipart ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(deviceFingerprint ? { "X-Device-Fingerprint": deviceFingerprint } : {}),
       },
-      body: options.body ? JSON.stringify(options.body) : undefined,
+      body: isMultipart
+        ? (options.body as FormData)
+        : options.body
+          ? JSON.stringify(options.body)
+          : undefined,
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {

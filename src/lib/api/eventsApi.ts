@@ -21,6 +21,28 @@ export async function getActiveEvent(): Promise<EventResponse | null> {
 }
 
 /**
+ * Uploads a single image file to `POST /api/admin/events/upload` as
+ * multipart/form-data and returns the hosted `image_url` the backend
+ * responds with. The `Authorization: Bearer <token>` header and the
+ * `X-Device-Fingerprint` header are attached automatically by `apiFetch`;
+ * the browser sets the multipart Content-Type/boundary itself.
+ */
+export async function uploadEventImage(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+
+  const res = await apiFetch<{ image_url: string }>("/api/admin/events/upload", {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res || typeof res.image_url !== "string" || res.image_url === "") {
+    throw new Error("Upload succeeded but no image_url was returned.");
+  }
+  return res.image_url;
+}
+
+/**
  * `POST /api/admin/events`. The `Authorization: Bearer <token>` header is
  * attached automatically by `apiFetch` from the in-memory auth state; the
  * route is gated by the backend's `RequireAccessToken` + `RequireAdmin`

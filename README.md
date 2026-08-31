@@ -26,10 +26,10 @@ check on `/api/auth/login`.
 | --- | --- | --- |
 | API client | `src/lib/api/client.ts` | `credentials: "include"`, 12s timeout, `X-Device-Fingerprint` header, `ApiError`, shared 401 → silent-refresh → retry-once interceptor (`refreshOnce` coalesces concurrent refreshes). |
 | Auth state | `src/lib/auth/AuthProvider.tsx` | Access token held **in memory only** (ref + state, never `localStorage`). Refresh token is a browser-managed HttpOnly cookie. Proactive refresh timer fires 30s before expiry; cross-tab `storage` sentinel syncs login/logout. Bootstraps a session from the refresh cookie on mount. |
-| Endpoints | `src/lib/api/authApi.ts`, `src/lib/api/eventsApi.ts` | `login` / `refresh` / `logout` / `me`; events `getActiveEvent` (public), `createEvent` (POST), `updateEvent` (PUT). Bearer token attached automatically by `apiFetch`. |
+| Endpoints | `src/lib/api/authApi.ts`, `src/lib/api/eventsApi.ts` | `login` / `refresh` / `logout` / `me`; events `getActiveEvent` (public), `uploadEventImage` (multipart `POST /api/admin/events/upload` → `{ image_url }`), `createEvent` (POST), `updateEvent` (PUT). Bearer token attached automatically by `apiFetch` (FormData bodies supported — browser sets the multipart boundary). |
 | Route guard | `src/components/auth/ProtectedRoute.tsx` | Session-presence check + redirect to `/login`. Admin-role authorization stays server-side (`RequireAdmin`). |
 | Layout | `src/app/dashboard/layout.tsx`, `src/components/layout/Sidebar.tsx` | Persistent sidebar: **Overview**, **Events Management**. |
-| Events module | `src/app/dashboard/events/page.tsx`, `src/components/events/EventForm.tsx` | Form matches `EventRequest` DTO: `title`, `description`, `image_url`, `event_date` (`datetime-local` ↔ RFC3339 via `src/lib/utils/datetime.ts`), `is_active` (toggle). |
+| Events module | `src/app/dashboard/events/page.tsx`, `src/components/events/EventForm.tsx` | Form matches `EventRequest` DTO: `title`, `description`, image (`<input type="file" accept="image/*">` with local preview → uploaded on submit, resulting `image_url` attached to the payload), `event_date` (`datetime-local` → strict UTC ISO-8601 via `src/lib/utils/datetime.ts`), `is_active` (toggle). |
 
 ## Routes
 
@@ -42,4 +42,14 @@ check on `/api/auth/login`.
 
 - `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me`
 - `GET /api/client/events` (active event; no admin "list/get" endpoint exists)
+- `POST /api/admin/events/upload` — multipart `file` field, returns `{ "image_url": "..." }` *(not yet implemented in the Go backend — see below)*
 - `POST /api/admin/events`, `PUT /api/admin/events/{id}` — require `Authorization: Bearer <token>` + admin role
+
+## Backend TODO for image upload
+
+The admin form now uploads image files, but the Go backend needs a matching route:
+
+- `POST /api/admin/events/upload` under the existing `/api/admin` group (already gated by `RequireAccessToken` + `RequireAdmin`).
+- Parse `multipart/form-data`, read the `file` part, validate it is an image within a size cap.
+- Persist it (object storage / disk / CDN) and respond `200 { "image_url": "<public URL>" }`.
+- Add `multipart/form-data` handling; CORS already allows the `Authorization` header on this origin.

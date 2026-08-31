@@ -14,13 +14,34 @@ export function isoToDatetimeLocal(iso: string): string {
 }
 
 /**
- * Converts a `datetime-local` input value (local wall-clock time, no zone)
- * into a full RFC3339 UTC string that Go's `time.Time` JSON decoder accepts.
+ * Converts a `datetime-local` input value into a strict UTC ISO-8601 /
+ * RFC3339 string (`YYYY-MM-DDTHH:mm:ssZ`) that Go's `time.Time` JSON
+ * decoder accepts.
+ *
+ * The input is bare wall-clock time with no zone (`2026-08-31T10:00`).
+ * Parsing the components explicitly and building the Date via the local
+ * constructor — rather than `new Date(value)` — avoids engine-specific
+ * ambiguity and makes the "local time in, UTC out" conversion deliberate,
+ * so the timestamp the backend stores matches the moment the admin picked.
  */
 export function datetimeLocalToISO(value: string): string {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) {
-    throw new Error("Invalid date");
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value.trim());
+  if (!match) {
+    throw new Error("Invalid date/time value");
   }
-  return d.toISOString();
+  const [, year, month, day, hour, minute, second] = match;
+  const local = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    second ? Number(second) : 0,
+    0,
+  );
+  if (Number.isNaN(local.getTime())) {
+    throw new Error("Invalid date/time value");
+  }
+  // Drop milliseconds for a clean RFC3339 string.
+  return local.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
