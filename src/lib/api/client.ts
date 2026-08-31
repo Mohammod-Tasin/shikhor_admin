@@ -61,7 +61,9 @@ interface FetchOptions {
 }
 
 const REQUEST_TIMEOUT_MS = 12_000;
-const UPLOAD_TIMEOUT_MS = 45_000;
+// Large multipart uploads on slow connections need a generous ceiling so
+// the AbortController never cuts off an in-progress upload.
+const UPLOAD_TIMEOUT_MS = 300_000;
 
 async function doFetch(path: string, options: FetchOptions, token: string | null): Promise<Response> {
   const deviceFingerprint = await getDeviceFingerprint();

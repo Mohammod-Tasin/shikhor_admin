@@ -34,6 +34,9 @@ export async function uploadEventImage(file: File): Promise<string> {
   const res = await apiFetch<{ image_url: string }>("/api/admin/events/upload", {
     method: "POST",
     body: form,
+    // Large files on slow connections: allow up to 5 minutes before the
+    // client aborts the upload.
+    timeoutMs: 300_000,
   });
 
   if (!res || typeof res.image_url !== "string" || res.image_url === "") {
