@@ -1,6 +1,6 @@
 import { getDeviceFingerprint } from "../utils/fingerprint";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 export class ApiError extends Error {
   constructor(
@@ -34,6 +34,17 @@ export function configureApiClient(config: {
   getAccessToken = config.getAccessToken;
   refreshAccessToken = config.refreshAccessToken;
   onAuthFailure = config.onAuthFailure;
+}
+
+/**
+ * The current in-memory access token, or `null` when no session is active.
+ * Exposed for the handful of call sites that must issue an authenticated
+ * request outside of `apiFetch` — e.g. fetching an auth-gated media file as
+ * a Blob, where the browser cannot attach a Bearer header to an `<img>` or
+ * `<iframe>` request on its own.
+ */
+export function getCurrentAccessToken(): string | null {
+  return getAccessToken();
 }
 
 /**
