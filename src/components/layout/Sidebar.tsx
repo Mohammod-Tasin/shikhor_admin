@@ -51,6 +51,16 @@ const NAV_LINKS: Array<{ href: string; label: string; icon: ReactNode }> = [
       </svg>
     ),
   },
+  {
+    href: "/dashboard/registrations",
+    label: "Exam Registrations",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]" aria-hidden="true">
+        <rect x="4" y="3.5" width="16" height="17" rx="2" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
 ];
 
 export function Sidebar() {

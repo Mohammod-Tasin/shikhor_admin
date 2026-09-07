@@ -91,6 +91,12 @@ export default function EventsManagementPage() {
                 <Field label="Event date" value={formatDate(event.event_date)} />
                 <Field label="Status" value={event.is_active ? "Active" : "Inactive"} />
                 <Field label="Image URL" value={event.image_url || "—"} />
+                <Field label="bKash number" value={event.bkash_number || "—"} />
+                <Field label="Nagad number" value={event.nagad_number || "—"} />
+                <Field
+                  label="Registration fee"
+                  value={event.registration_fee ? `৳ ${event.registration_fee}` : "—"}
+                />
                 <div className="sm:col-span-2">
                   <Field label="Description" value={event.description || "—"} />
                 </div>
