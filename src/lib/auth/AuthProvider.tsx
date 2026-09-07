@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import * as authApi from "@/lib/api/authApi";
-import { ApiError, configureApiClient, refreshOnce } from "@/lib/api/client";
+import { ApiError, configureApiClient, refreshOnce, resetRefresh } from "@/lib/api/client";
 import type { AdminUser, AuthStatus } from "@/types/auth";
 
 interface AuthContextValue {
@@ -44,6 +44,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ago is visible to the very next fetch, without waiting on a re-render.
   const accessTokenRef = useRef<string | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Bumped every time an interactive login establishes a session. A refresh
+  // that was already in flight when that login landed — most often the
+  // mount bootstrap, fired with the pre-login (usually empty) cookie state
+  // — must not tear the new session down when it later fails. Each such
+  // async path captures the epoch it began under and bails if it changed.
+  const sessionEpoch = useRef(0);
 
   const clearScheduledRefresh = () => {
     if (refreshTimer.current) {
@@ -94,10 +101,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const applySession = useCallback(
     async (token: string, expiresAt: string) => {
       applyToken(token, expiresAt);
-      await syncIdentity();
-      broadcastAuthStatus("in");
+      // This session now wins over any refresh still in flight, and the
+      // shared refresh singleton is dropped so the next refresh runs
+      // against the cookie /login just issued rather than reusing a
+      // pre-login attempt's doomed result.
+      sessionEpoch.current += 1;
+      resetRefresh();
+
+      try {
+        // We hold a token straight from a successful /login, so a failure
+        // to read /me here is almost always a transient backend blip, not
+        // a real auth problem — give it a couple of retries before giving
+        // up. A hard 401 is the exception and propagates immediately.
+        let lastErr: unknown;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await syncIdentity();
+            broadcastAuthStatus("in");
+            return;
+          } catch (err) {
+            lastErr = err;
+            if (err instanceof ApiError && err.status === 401) throw err;
+            await new Promise((r) => setTimeout(r, 400));
+          }
+        }
+        throw lastErr;
+      } catch (err) {
+        // Login succeeded but identity could not be confirmed. Fall to a
+        // terminal state (clearSession → "unauthenticated") so the form
+        // shows an error and stays usable — never leave `status` at
+        // "loading", which spins ProtectedRoute forever.
+        clearSession();
+        throw err;
+      }
     },
-    [applyToken, syncIdentity],
+    [applyToken, syncIdentity, clearSession],
   );
 
   // The underlying refresh call. Never invoke this directly outside of
@@ -105,13 +143,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // through the client's `refreshOnce` singleton instead, so concurrent
   // triggers coalesce onto one in-flight request.
   const refreshAccessToken = useCallback(async (): Promise<string | null> => {
+    const epoch = sessionEpoch.current;
     try {
       const res = await authApi.refresh();
       applyToken(res.access_token, res.access_token_expires_at);
       return res.access_token;
-    } catch {
-      clearSession();
-      broadcastAuthStatus("out");
+    } catch (err) {
+      // A newer login superseded this refresh while it was in flight — its
+      // failure says nothing about the session that login just created.
+      if (sessionEpoch.current !== epoch) return null;
+      // Only a hard 401 means the refresh cookie itself is dead: a real
+      // logout. A network error, timeout, or 5xx is a transient miss —
+      // keep the session so one flaky refresh doesn't bounce the admin to
+      // /login; the caller gets null and the next trigger retries.
+      if (err instanceof ApiError && err.status === 401) {
+        clearSession();
+        broadcastAuthStatus("out");
+      }
       return null;
     }
   }, [applyToken, clearSession]);
@@ -124,7 +172,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     void (async () => {
+      const epoch = sessionEpoch.current;
       const token = await refreshOnce();
+      // A login completed while the bootstrap refresh was in flight — it
+      // now owns `status` and the session. Anything we do here would be
+      // acting on stale, pre-login state, so stand down.
+      if (sessionEpoch.current !== epoch) return;
       if (!token) {
         setStatus("unauthenticated");
         return;
@@ -134,8 +187,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         // Bootstrap has no prior authenticated state to preserve — it must
         // still resolve `status` out of "loading" or the app spins forever
-        // on a flaky first request.
-        clearSession();
+        // on a flaky first request. Still skip if a login raced in.
+        if (sessionEpoch.current === epoch) clearSession();
       }
     })();
 

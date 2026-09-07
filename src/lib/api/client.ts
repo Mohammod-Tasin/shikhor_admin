@@ -54,11 +54,26 @@ export function getCurrentAccessToken(): string | null {
  */
 export function refreshOnce(): Promise<string | null> {
   if (!refreshPromise) {
-    refreshPromise = refreshAccessToken().finally(() => {
-      refreshPromise = null;
+    const p: Promise<string | null> = refreshAccessToken().finally(() => {
+      // Only clear the slot if it still holds *this* call — `resetRefresh`
+      // (invoked right after an interactive login) may already have made
+      // room for a newer one that must not be wiped out from under it.
+      if (refreshPromise === p) refreshPromise = null;
     });
+    refreshPromise = p;
   }
   return refreshPromise;
+}
+
+/**
+ * Detaches any in-flight shared refresh. Called right after an interactive
+ * login: a refresh that started before the login carried the pre-login
+ * cookie state (often none at all), so its result is moot and must not be
+ * handed to a post-login caller — the next `refreshOnce` starts clean
+ * against the freshly issued cookie.
+ */
+export function resetRefresh(): void {
+  refreshPromise = null;
 }
 
 interface FetchOptions {
@@ -76,7 +91,13 @@ const REQUEST_TIMEOUT_MS = 12_000;
 // the AbortController never cuts off an in-progress upload.
 const UPLOAD_TIMEOUT_MS = 300_000;
 
-async function doFetch(path: string, options: FetchOptions, token: string | null): Promise<Response> {
+interface RawResult {
+  status: number;
+  ok: boolean;
+  data: unknown;
+}
+
+async function doFetch(path: string, options: FetchOptions, token: string | null): Promise<RawResult> {
   const deviceFingerprint = await getDeviceFingerprint();
 
   // A FormData body is sent as multipart so the browser can set the
@@ -90,7 +111,7 @@ async function doFetch(path: string, options: FetchOptions, token: string | null
   );
 
   try {
-    return await fetch(`${API_URL}${path}`, {
+    const res = await fetch(`${API_URL}${path}`, {
       method: options.method ?? "GET",
       credentials: "include",
       signal: controller.signal,
@@ -105,6 +126,13 @@ async function doFetch(path: string, options: FetchOptions, token: string | null
           ? JSON.stringify(options.body)
           : undefined,
     });
+
+    // Read the body here, still inside the abort window. fetch() resolves
+    // as soon as the response headers land, so a stalled or half-open body
+    // stream would hang res.json() forever if it ran after the timer was
+    // cleared — that was the "Signing in…" hang.
+    const data = res.status === 204 ? undefined : await res.json().catch(() => null);
+    return { status: res.status, ok: res.ok, data };
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       throw new ApiError(408, "Request timed out");
@@ -142,13 +170,13 @@ export async function apiFetch<T>(path: string, options: FetchOptions = {}): Pro
     return undefined as T;
   }
 
-  const data = await res.json().catch(() => null);
-
   if (!res.ok) {
     const message =
-      (data && typeof data === "object" && "error" in data ? String(data.error) : null) ?? res.statusText;
+      (res.data && typeof res.data === "object" && "error" in res.data
+        ? String((res.data as { error: unknown }).error)
+        : null) ?? `Request failed (${res.status})`;
     throw new ApiError(res.status, message);
   }
 
-  return data as T;
+  return res.data as T;
 }
