@@ -1,17 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getPendingRegistrations, reviewRegistration } from "@/lib/api/registrationsApi";
+import {
+  getRegistrations,
+  reviewRegistration,
+  unrejectRegistration,
+} from "@/lib/api/registrationsApi";
 import { ApiError } from "@/lib/api/client";
 import {
   registrationStudentName,
   type PendingRegistration,
   type RegistrationDecision,
+  type RegistrationStatus,
 } from "@/types/registration";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
-type RowState = { kind: "idle" } | { kind: "working"; decision: RegistrationDecision };
+type RowAction = RegistrationDecision | "unrejected";
+type RowState = { kind: "idle" } | { kind: "working"; action: RowAction };
 
 function formatSubmitted(iso: string): string {
   const d = new Date(iso);
@@ -20,7 +26,9 @@ function formatSubmitted(iso: string): string {
 }
 
 export default function ExamRegistrationsPage() {
-  const [registrations, setRegistrations] = useState<PendingRegistration[]>([]);
+  const [pendingRegistrations, setPendingRegistrations] = useState<PendingRegistration[]>([]);
+  const [rejectedRegistrations, setRejectedRegistrations] = useState<PendingRegistration[]>([]);
+  const [status, setStatus] = useState<RegistrationStatus>("pending");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -32,8 +40,14 @@ export default function ExamRegistrationsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const pending = await getPendingRegistrations();
-        if (!cancelled) setRegistrations(pending);
+        const [pending, rejected] = await Promise.all([
+          getRegistrations("pending"),
+          getRegistrations("rejected"),
+        ]);
+        if (!cancelled) {
+          setPendingRegistrations(pending);
+          setRejectedRegistrations(rejected);
+        }
       } catch {
         if (!cancelled) setLoadError("Could not load registrations awaiting review.");
       } finally {
@@ -48,11 +62,14 @@ export default function ExamRegistrationsPage() {
   async function decide(reg: PendingRegistration, decision: RegistrationDecision) {
     setActionError(null);
     setNotice(null);
-    setRowState((prev) => ({ ...prev, [reg.id]: { kind: "working", decision } }));
+    setRowState((prev) => ({ ...prev, [reg.id]: { kind: "working", action: decision } }));
 
     try {
       await reviewRegistration(reg.id, decision);
-      setRegistrations((prev) => prev.filter((r) => r.id !== reg.id));
+      setPendingRegistrations((prev) => prev.filter((r) => r.id !== reg.id));
+      if (decision === "rejected") {
+        setRejectedRegistrations((prev) => [{ ...reg, status: "rejected" }, ...prev]);
+      }
       setRowState((prev) => {
         const next = { ...prev };
         delete next[reg.id];
@@ -76,6 +93,40 @@ export default function ExamRegistrationsPage() {
       );
     }
   }
+
+  async function unreject(reg: PendingRegistration) {
+    setActionError(null);
+    setNotice(null);
+    setRowState((prev) => ({ ...prev, [reg.id]: { kind: "working", action: "unrejected" } }));
+
+    try {
+      await unrejectRegistration(reg.id);
+      setRejectedRegistrations((prev) => prev.filter((r) => r.id !== reg.id));
+      setPendingRegistrations((prev) => [{ ...reg, status: "pending" }, ...prev]);
+      setRowState((prev) => {
+        const next = { ...prev };
+        delete next[reg.id];
+        return next;
+      });
+      setNotice(`${registrationStudentName(reg)}'s registration was returned to pending review.`);
+    } catch (err) {
+      setRowState((prev) => ({ ...prev, [reg.id]: { kind: "idle" } }));
+      setActionError(
+        err instanceof ApiError
+          ? err.status === 403
+            ? "Your account does not have admin access for this action."
+            : err.message
+          : "Something went wrong. Please try again.",
+      );
+    }
+  }
+
+  const registrations = status === "pending" ? pendingRegistrations : rejectedRegistrations;
+  const title = status === "pending" ? "Awaiting review" : "Rejected registrations";
+  const emptyMessage =
+    status === "pending"
+      ? "No exam-registration payments are waiting for review right now."
+      : "No exam registrations have been rejected.";
 
   return (
     <div>
@@ -103,10 +154,26 @@ export default function ExamRegistrationsPage() {
 
       <Card>
         <CardHeader className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-ink-900">Awaiting review</h2>
-          <span className="text-xs text-ink-500">
-            {loading ? "…" : `${registrations.length} pending`}
-          </span>
+          <div>
+            <h2 className="text-sm font-semibold text-ink-900">{title}</h2>
+            <span className="text-xs text-ink-500">
+              {loading ? "…" : `${registrations.length} ${status}`}
+            </span>
+          </div>
+          <div className="flex gap-2" role="tablist" aria-label="Registration status">
+            {(["pending", "rejected"] as const).map((tab) => (
+              <Button
+                key={tab}
+                role="tab"
+                aria-selected={status === tab}
+                variant={status === tab ? "primary" : "outline"}
+                size="sm"
+                onClick={() => setStatus(tab)}
+              >
+                {tab === "pending" ? "Pending" : "Rejected"}
+              </Button>
+            ))}
+          </div>
         </CardHeader>
         {loading ? (
           <CardContent>
@@ -118,9 +185,7 @@ export default function ExamRegistrationsPage() {
           </CardContent>
         ) : registrations.length === 0 ? (
           <CardContent>
-            <p className="text-sm text-ink-500">
-              No exam-registration payments are waiting for review right now.
-            </p>
+            <p className="text-sm text-ink-500">{emptyMessage}</p>
           </CardContent>
         ) : (
           <div className="overflow-x-auto">
@@ -161,24 +226,38 @@ export default function ExamRegistrationsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            loading={working && state.decision === "approved"}
-                            disabled={working}
-                            onClick={() => decide(reg, "approved")}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            loading={working && state.decision === "rejected"}
-                            disabled={working}
-                            onClick={() => decide(reg, "rejected")}
-                          >
-                            Reject
-                          </Button>
+                          {status === "pending" ? (
+                            <>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                loading={working && state.action === "approved"}
+                                disabled={working}
+                                onClick={() => decide(reg, "approved")}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                loading={working && state.action === "rejected"}
+                                disabled={working}
+                                onClick={() => decide(reg, "rejected")}
+                              >
+                                Reject
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              loading={working && state.action === "unrejected"}
+                              disabled={working}
+                              onClick={() => unreject(reg)}
+                            >
+                              Un-reject
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
