@@ -7,14 +7,16 @@
  * Only `user_id` and `verification_doc` are relied on as always-present;
  * the display fields are optional so a sparse record still renders without
  * throwing, and `full_name` is accepted as an alias for `name`.
+ *
+ * Field names must match the backend payload: it sends `institution_name`
+ * (not `institution`) and `full_name`.
  */
 export interface PendingUser {
   user_id: string;
   name?: string;
   full_name?: string;
   email?: string;
-  phone_number?: string;
-  institution?: string;
+  institution_name?: string;
   level?: string;
   /** Auth-gated URL (absolute or API-relative) of the uploaded document. */
   verification_doc: string;

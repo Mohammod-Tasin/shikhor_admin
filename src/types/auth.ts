@@ -1,9 +1,10 @@
 export interface AdminUser {
   user_id: string;
   email: string;
-  phone_number?: string;
-  is_email_verified: boolean;
-  is_phone_verified: boolean;
+  // Field names mirror the Go backend's GET /api/auth/me payload exactly.
+  // Phone auth was removed backend-side, so there is no phone_number /
+  // phone-verified field to carry here.
+  email_verified: boolean;
 }
 
 export interface AuthResponse {
