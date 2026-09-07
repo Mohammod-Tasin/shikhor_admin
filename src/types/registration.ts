@@ -23,7 +23,7 @@ export interface PendingRegistration {
 }
 
 /** States exposed in the admin payment-review queue. */
-export type RegistrationStatus = "pending" | "rejected";
+export type RegistrationStatus = "pending" | "approved" | "rejected";
 
 /** The two terminal states an admin can move a pending registration to. */
 export type RegistrationDecision = "approved" | "rejected";
