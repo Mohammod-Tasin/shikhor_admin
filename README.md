@@ -18,7 +18,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8080
 
 The admin origin (`http://localhost:3001`) is already in the backend's
 default `ALLOWED_ORIGINS`, which it needs for CORS + the trusted-origin
-check on `/api/auth/login`.
+check on `/api/auth/admin/login`.
 
 ## Architecture
 
@@ -34,13 +34,16 @@ check on `/api/auth/login`.
 ## Routes
 
 - `/` → redirects to `/dashboard`
-- `/login` — email/password → `POST /api/auth/login`
+- `/login` — email/password → `POST /api/auth/admin/login`
 - `/dashboard` — Overview (active event + session summary)
 - `/dashboard/events` — view / create / edit the active event
 
 ## Backend endpoints consumed
 
-- `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me`
+- `POST /api/auth/admin/login`, `POST /api/auth/admin/refresh`, `POST /api/auth/admin/logout`, `GET /api/auth/me`
+  (the admin console uses the backend's admin-scoped auth routes, which set a
+  separate `admin_refresh_token` cookie so an admin and a student session can
+  coexist in one browser; `admin/login` also 403s a non-admin account)
 - `GET /api/client/events` (active event; no admin "list/get" endpoint exists)
 - `POST /api/admin/events/upload` — multipart `file` field, returns `{ "image_url": "..." }` *(not yet implemented in the Go backend — see below)*
 - `POST /api/admin/events`, `PUT /api/admin/events/{id}` — require `Authorization: Bearer <token>` + admin role
