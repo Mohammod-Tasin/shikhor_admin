@@ -1,7 +1,7 @@
 /**
  * Mirrors the Go backend's `dto.AdminRegistrationResponse`, one row of the
  * exam-registration payment review queue returned by
- * `GET /api/admin/registrations?status=pending`.
+ * `GET /api/admin/registrations?status={status}`.
  *
  * A student has sent an event's registration fee to its bKash/Nagad number
  * and submitted the wallet transaction ID; an admin checks it against
@@ -21,6 +21,9 @@ export interface PendingRegistration {
   created_at: string;
   reviewed_at?: string | null;
 }
+
+/** States exposed in the admin payment-review queue. */
+export type RegistrationStatus = "pending" | "rejected";
 
 /** The two terminal states an admin can move a pending registration to. */
 export type RegistrationDecision = "approved" | "rejected";
