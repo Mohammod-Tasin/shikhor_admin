@@ -102,7 +102,7 @@ export default function OverviewPage() {
             <div className="flex justify-between">
               <span className="text-ink-500">Email verified</span>
               <span className="font-medium text-ink-900">
-                {user?.is_email_verified ? "Yes" : "No"}
+                {user?.email_verified ? "Yes" : "No"}
               </span>
             </div>
             <div className="flex justify-between">

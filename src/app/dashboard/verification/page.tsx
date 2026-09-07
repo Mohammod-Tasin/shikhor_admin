@@ -134,7 +134,7 @@ export default function UserVerificationPage() {
                         <p className="font-medium text-ink-900">{pendingUserName(user)}</p>
                         {user.email && <p className="text-xs text-ink-500">{user.email}</p>}
                       </td>
-                      <td className="px-6 py-4 text-ink-700">{user.institution || "—"}</td>
+                      <td className="px-6 py-4 text-ink-700">{user.institution_name || "—"}</td>
                       <td className="px-6 py-4 text-ink-700">{user.level || "—"}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
