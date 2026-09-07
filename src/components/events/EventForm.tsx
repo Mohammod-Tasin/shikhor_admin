@@ -19,6 +19,7 @@ interface EventFormProps {
 interface FieldErrors {
   title?: string;
   event_date?: string;
+  registration_fee?: string;
 }
 
 export function EventForm({ event, onSuccess }: EventFormProps) {
@@ -30,6 +31,11 @@ export function EventForm({ event, onSuccess }: EventFormProps) {
     event?.event_date ? isoToDatetimeLocal(event.event_date) : "",
   );
   const [isActive, setIsActive] = useState(event?.is_active ?? false);
+  const [bkashNumber, setBkashNumber] = useState(event?.bkash_number ?? "");
+  const [nagadNumber, setNagadNumber] = useState(event?.nagad_number ?? "");
+  const [registrationFee, setRegistrationFee] = useState(
+    event?.registration_fee ? String(event.registration_fee) : "",
+  );
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -40,6 +46,12 @@ export function EventForm({ event, onSuccess }: EventFormProps) {
     const errors: FieldErrors = {};
     if (!title.trim()) errors.title = "Title is required.";
     if (!eventDate) errors.event_date = "Event date is required.";
+    if (registrationFee.trim() !== "") {
+      const fee = Number(registrationFee);
+      if (!Number.isInteger(fee) || fee < 0) {
+        errors.registration_fee = "Enter a whole number of Taka (0 or more).";
+      }
+    }
     return errors;
   }
 
@@ -70,6 +82,9 @@ export function EventForm({ event, onSuccess }: EventFormProps) {
         image_url: "",
         event_date: eventDateISO,
         is_active: isActive,
+        bkash_number: bkashNumber.trim(),
+        nagad_number: nagadNumber.trim(),
+        registration_fee: registrationFee.trim() === "" ? 0 : Number(registrationFee),
       };
 
       const result =
@@ -134,6 +149,44 @@ export function EventForm({ event, onSuccess }: EventFormProps) {
           description="Only one event should be active at a time — the client site renders the active one."
         />
       </div>
+
+      <fieldset className="flex flex-col gap-4 rounded-lg border border-slate-200 px-4 py-4">
+        <legend className="px-1 text-sm font-medium text-ink-900">Registration payment</legend>
+        <p className="text-xs text-ink-500">
+          Shown to students on the payment page. Students send the fee to one of these
+          numbers, then submit their bKash/Nagad transaction ID for manual review.
+        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Input
+            id="bkash_number"
+            label="bKash number"
+            value={bkashNumber}
+            onChange={(e) => setBkashNumber(e.target.value)}
+            placeholder="01XXXXXXXXX"
+            inputMode="numeric"
+          />
+          <Input
+            id="nagad_number"
+            label="Nagad number"
+            value={nagadNumber}
+            onChange={(e) => setNagadNumber(e.target.value)}
+            placeholder="01XXXXXXXXX"
+            inputMode="numeric"
+          />
+        </div>
+        <Input
+          id="registration_fee"
+          label="Registration fee (৳)"
+          type="number"
+          min={0}
+          step={1}
+          value={registrationFee}
+          error={fieldErrors.registration_fee}
+          onChange={(e) => setRegistrationFee(e.target.value)}
+          placeholder="0"
+          hint="Whole Taka. Leave as 0 until the fee is finalised."
+        />
+      </fieldset>
 
       {formError && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">

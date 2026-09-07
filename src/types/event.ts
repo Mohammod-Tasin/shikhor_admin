@@ -10,6 +10,13 @@ export interface EventRequest {
   image_url: string;
   event_date: string;
   is_active: boolean;
+  /** Manual bKash/Nagad payment details for exam registration. The backend
+   * replaces all event fields on update, so these must be sent on every
+   * edit or they reset to blank/zero. */
+  bkash_number: string;
+  nagad_number: string;
+  /** Whole Bangladeshi Taka; 0 means "no fee shown yet". */
+  registration_fee: number;
 }
 
 /** Mirrors the Go backend's `dto.EventResponse`. */
@@ -20,6 +27,9 @@ export interface EventResponse {
   image_url: string;
   event_date: string;
   is_active: boolean;
+  bkash_number: string;
+  nagad_number: string;
+  registration_fee: number;
   created_at: string;
   updated_at: string;
 }
