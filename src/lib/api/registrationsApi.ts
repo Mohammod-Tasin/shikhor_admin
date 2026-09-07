@@ -13,12 +13,22 @@ import type {
  * The backend wraps the rows in `{ registrations }`; a bare array or
  * `{ data }` are tolerated too so a shape tweak doesn't break the queue.
  */
-export async function getRegistrations(status: RegistrationStatus): Promise<PendingRegistration[]> {
+interface RegistrationFilters {
+  status?: RegistrationStatus;
+  eventId?: string;
+}
+
+export async function getRegistrations({ status, eventId }: RegistrationFilters = {}): Promise<PendingRegistration[]> {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (eventId) params.set("event_id", eventId);
+  const query = params.size ? `?${params.toString()}` : "";
+
   const res = await apiFetch<
     | PendingRegistration[]
     | { registrations?: PendingRegistration[]; data?: PendingRegistration[] }
     | null
-  >(`/api/admin/registrations?status=${encodeURIComponent(status)}`);
+  >(`/api/admin/registrations${query}`);
 
   if (Array.isArray(res)) return res;
   return res?.registrations ?? res?.data ?? [];

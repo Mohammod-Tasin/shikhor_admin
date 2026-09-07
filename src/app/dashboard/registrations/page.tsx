@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   getRegistrations,
   reviewRegistration,
@@ -16,8 +17,12 @@ import {
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
+type RegistrationFilter = "all" | RegistrationStatus;
 type RowAction = RegistrationDecision | "unrejected";
 type RowState = { kind: "idle" } | { kind: "working"; action: RowAction };
+
+const QUEUE_FILTERS: RegistrationFilter[] = ["pending", "rejected"];
+const PARTICIPANT_FILTERS: RegistrationFilter[] = ["all", "pending", "approved", "rejected"];
 
 function formatSubmitted(iso: string): string {
   const d = new Date(iso);
@@ -25,10 +30,24 @@ function formatSubmitted(iso: string): string {
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+function filterLabel(filter: RegistrationFilter): string {
+  return filter === "all" ? "All" : `${filter[0].toUpperCase()}${filter.slice(1)}`;
+}
+
 export default function ExamRegistrationsPage() {
-  const [pendingRegistrations, setPendingRegistrations] = useState<PendingRegistration[]>([]);
-  const [rejectedRegistrations, setRejectedRegistrations] = useState<PendingRegistration[]>([]);
-  const [status, setStatus] = useState<RegistrationStatus>("pending");
+  return (
+    <Suspense fallback={<p className="text-sm text-ink-500">Loading…</p>}>
+      <ExamRegistrationsContent />
+    </Suspense>
+  );
+}
+
+function ExamRegistrationsContent() {
+  const searchParams = useSearchParams();
+  const eventId = searchParams.get("event_id")?.trim() || null;
+  const [registrations, setRegistrations] = useState<PendingRegistration[]>([]);
+  const [status, setStatus] = useState<RegistrationFilter>("pending");
+  const appliedEventId = useRef<string | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -36,28 +55,45 @@ export default function ExamRegistrationsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const filters = eventId ? PARTICIPANT_FILTERS : QUEUE_FILTERS;
+
   useEffect(() => {
+    const defaultStatus: RegistrationFilter = eventId ? "all" : "pending";
+    if (appliedEventId.current !== eventId) {
+      appliedEventId.current = eventId;
+      if (status !== defaultStatus) {
+        setStatus(defaultStatus);
+        return;
+      }
+    }
+
     let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
     (async () => {
       try {
-        const [pending, rejected] = await Promise.all([
-          getRegistrations("pending"),
-          getRegistrations("rejected"),
-        ]);
-        if (!cancelled) {
-          setPendingRegistrations(pending);
-          setRejectedRegistrations(rejected);
-        }
+        const rows = await getRegistrations({
+          status: status === "all" ? undefined : status,
+          eventId: eventId ?? undefined,
+        });
+        if (!cancelled) setRegistrations(rows);
       } catch {
-        if (!cancelled) setLoadError("Could not load registrations awaiting review.");
+        if (!cancelled) {
+          setLoadError(
+            eventId
+              ? "Could not load participants for this event."
+              : "Could not load registrations awaiting review.",
+          );
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [eventId, status]);
 
   async function decide(reg: PendingRegistration, decision: RegistrationDecision) {
     setActionError(null);
@@ -66,10 +102,11 @@ export default function ExamRegistrationsPage() {
 
     try {
       await reviewRegistration(reg.id, decision);
-      setPendingRegistrations((prev) => prev.filter((r) => r.id !== reg.id));
-      if (decision === "rejected") {
-        setRejectedRegistrations((prev) => [{ ...reg, status: "rejected" }, ...prev]);
-      }
+      setRegistrations((prev) =>
+        status === "all"
+          ? prev.map((row) => (row.id === reg.id ? { ...row, status: decision } : row))
+          : prev.filter((row) => row.id !== reg.id),
+      );
       setRowState((prev) => {
         const next = { ...prev };
         delete next[reg.id];
@@ -101,8 +138,11 @@ export default function ExamRegistrationsPage() {
 
     try {
       await unrejectRegistration(reg.id);
-      setRejectedRegistrations((prev) => prev.filter((r) => r.id !== reg.id));
-      setPendingRegistrations((prev) => [{ ...reg, status: "pending" }, ...prev]);
+      setRegistrations((prev) =>
+        status === "all"
+          ? prev.map((row) => (row.id === reg.id ? { ...row, status: "pending" } : row))
+          : prev.filter((row) => row.id !== reg.id),
+      );
       setRowState((prev) => {
         const next = { ...prev };
         delete next[reg.id];
@@ -121,10 +161,14 @@ export default function ExamRegistrationsPage() {
     }
   }
 
-  const registrations = status === "pending" ? pendingRegistrations : rejectedRegistrations;
-  const title = status === "pending" ? "Awaiting review" : "Rejected registrations";
-  const emptyMessage =
-    status === "pending"
+  const title = eventId
+    ? "Event participants"
+    : status === "pending"
+      ? "Awaiting review"
+      : "Rejected registrations";
+  const emptyMessage = eventId
+    ? `No ${status === "all" ? "registrations" : `${status} registrations`} found for this event.`
+    : status === "pending"
       ? "No exam-registration payments are waiting for review right now."
       : "No exam registrations have been rejected.";
 
@@ -132,12 +176,15 @@ export default function ExamRegistrationsPage() {
     <div>
       <header className="mb-8">
         <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">
-          Exam Registrations
+          {eventId ? "Event Participants" : "Exam Registrations"}
         </p>
-        <h1 className="mt-1 text-2xl font-semibold text-ink-900">Payment verification</h1>
+        <h1 className="mt-1 text-2xl font-semibold text-ink-900">
+          {eventId ? "Participant list" : "Payment verification"}
+        </h1>
         <p className="mt-1 text-sm text-ink-500">
-          Check each transaction ID against your bKash/Nagad statement, then approve or reject
-          the registration.
+          {eventId
+            ? "Review this event's registrations and their payment status."
+            : "Check each transaction ID against your bKash/Nagad statement, then approve or reject the registration."}
         </p>
       </header>
 
@@ -153,15 +200,15 @@ export default function ExamRegistrationsPage() {
       )}
 
       <Card>
-        <CardHeader className="flex items-center justify-between">
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-ink-900">{title}</h2>
             <span className="text-xs text-ink-500">
-              {loading ? "…" : `${registrations.length} ${status}`}
+              {loading ? "…" : `${registrations.length} ${status === "all" ? "total" : status}`}
             </span>
           </div>
-          <div className="flex gap-2" role="tablist" aria-label="Registration status">
-            {(["pending", "rejected"] as const).map((tab) => (
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Registration status">
+            {filters.map((tab) => (
               <Button
                 key={tab}
                 role="tab"
@@ -170,7 +217,7 @@ export default function ExamRegistrationsPage() {
                 size="sm"
                 onClick={() => setStatus(tab)}
               >
-                {tab === "pending" ? "Pending" : "Rejected"}
+                {filterLabel(tab)}
               </Button>
             ))}
           </div>
@@ -194,6 +241,7 @@ export default function ExamRegistrationsPage() {
                 <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-ink-500">
                   <th className="px-6 py-3 font-medium">Student</th>
                   <th className="px-6 py-3 font-medium">Event</th>
+                  <th className="px-6 py-3 font-medium">Status</th>
                   <th className="px-6 py-3 font-medium">Payment</th>
                   <th className="px-6 py-3 font-medium">Transaction ID</th>
                   <th className="px-6 py-3 font-medium">Submitted</th>
@@ -205,28 +253,24 @@ export default function ExamRegistrationsPage() {
                   const state = rowState[reg.id] ?? { kind: "idle" };
                   const working = state.kind === "working";
                   return (
-                    <tr
-                      key={reg.id}
-                      className="border-b border-slate-100 align-top last:border-0"
-                    >
+                    <tr key={reg.id} className="border-b border-slate-100 align-top last:border-0">
                       <td className="px-6 py-4">
                         <p className="font-medium text-ink-900">{registrationStudentName(reg)}</p>
                         <p className="text-xs text-ink-500">{reg.student_email}</p>
                       </td>
                       <td className="px-6 py-4 text-ink-700">{reg.event_title}</td>
+                      <td className="px-6 py-4">
+                        <span className="font-medium capitalize text-ink-700">{reg.status}</span>
+                      </td>
                       <td className="px-6 py-4 text-ink-700">
                         <span className="font-medium capitalize">{reg.payment_method}</span>
                         <p className="text-xs text-ink-500">from {reg.sender_number}</p>
                       </td>
-                      <td className="px-6 py-4 font-mono text-xs text-ink-900">
-                        {reg.transaction_id}
-                      </td>
-                      <td className="px-6 py-4 text-xs text-ink-500">
-                        {formatSubmitted(reg.created_at)}
-                      </td>
+                      <td className="px-6 py-4 font-mono text-xs text-ink-900">{reg.transaction_id}</td>
+                      <td className="px-6 py-4 text-xs text-ink-500">{formatSubmitted(reg.created_at)}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
-                          {status === "pending" ? (
+                          {reg.status === "pending" ? (
                             <>
                               <Button
                                 variant="primary"
@@ -247,7 +291,7 @@ export default function ExamRegistrationsPage() {
                                 Reject
                               </Button>
                             </>
-                          ) : (
+                          ) : reg.status === "rejected" ? (
                             <Button
                               variant="outline"
                               size="sm"
@@ -257,6 +301,8 @@ export default function ExamRegistrationsPage() {
                             >
                               Un-reject
                             </Button>
+                          ) : (
+                            <span className="text-xs text-ink-500">—</span>
                           )}
                         </div>
                       </td>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getActiveEvent } from "@/lib/api/eventsApi";
 import type { EventResponse } from "@/types/event";
 import { EventForm } from "@/components/events/EventForm";
@@ -16,6 +17,7 @@ function formatDate(iso: string): string {
 }
 
 export default function EventsManagementPage() {
+  const router = useRouter();
   const [event, setEvent] = useState<EventResponse | null>(null);
   const [mode, setMode] = useState<Mode>({ kind: "loading" });
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -79,9 +81,20 @@ export default function EventsManagementPage() {
               {event ? "Current active event" : "No active event"}
             </h2>
             {event && (
-              <Button variant="outline" size="sm" onClick={() => setMode({ kind: "edit" })}>
-                Edit
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    router.push(`/dashboard/registrations?event_id=${encodeURIComponent(event.id)}`)
+                  }
+                >
+                  View Participants
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setMode({ kind: "edit" })}>
+                  Edit
+                </Button>
+              </div>
             )}
           </CardHeader>
           <CardContent>
