@@ -58,3 +58,20 @@ export function unrejectRegistration(id: string) {
     { method: "PUT" },
   );
 }
+
+/**
+ * `POST /api/admin/registrations/{id}/admit-card` — multipart upload of the
+ * student's admit-card PDF in a `file` part. The backend only accepts this
+ * for an approved registration and allows re-upload (a new file overwrites
+ * the previous one). Responds with the updated registration row, including
+ * its `admit_card_url`. Bearer token and multipart boundary are handled by
+ * `apiFetch`.
+ */
+export function uploadAdmitCard(id: string, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  return apiFetch<PendingRegistration>(
+    `/api/admin/registrations/${encodeURIComponent(id)}/admit-card`,
+    { method: "POST", body: form },
+  );
+}

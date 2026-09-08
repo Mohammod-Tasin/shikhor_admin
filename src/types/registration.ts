@@ -20,6 +20,11 @@ export interface PendingRegistration {
   status: "pending" | "approved" | "rejected";
   created_at: string;
   reviewed_at?: string | null;
+  /**
+   * Public URL of the admit-card PDF once an admin has uploaded one. Only
+   * ever set on approved registrations; `null`/absent means none uploaded.
+   */
+  admit_card_url?: string | null;
 }
 
 /** States exposed in the admin payment-review queue. */
