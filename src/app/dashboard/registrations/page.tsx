@@ -6,6 +6,7 @@ import {
   getRegistrations,
   reviewRegistration,
   unrejectRegistration,
+  uploadAdmitCard,
 } from "@/lib/api/registrationsApi";
 import { ApiError } from "@/lib/api/client";
 import {
@@ -18,8 +19,13 @@ import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
 type RegistrationFilter = "all" | RegistrationStatus;
-type RowAction = RegistrationDecision | "unrejected";
+type RowAction = RegistrationDecision | "unrejected" | "admit-card";
 type RowState = { kind: "idle" } | { kind: "working"; action: RowAction };
+
+/** Admit cards must be PDFs — validated on the client before upload. */
+function isPdfFile(file: File): boolean {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
 
 const QUEUE_FILTERS: RegistrationFilter[] = ["pending", "rejected"];
 const PARTICIPANT_FILTERS: RegistrationFilter[] = ["all", "pending", "approved", "rejected"];
@@ -51,6 +57,7 @@ function ExamRegistrationsContent() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
   const [rowState, setRowState] = useState<Record<string, RowState>>({});
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -156,6 +163,46 @@ function ExamRegistrationsContent() {
           ? err.status === 403
             ? "Your account does not have admin access for this action."
             : err.message
+          : "Something went wrong. Please try again.",
+      );
+    }
+  }
+
+  async function sendAdmitCard(reg: PendingRegistration, file: File) {
+    setActionError(null);
+    setNotice(null);
+
+    if (!isPdfFile(file)) {
+      setActionError(`"${file.name}" is not a PDF. Admit cards must be uploaded as PDF files.`);
+      return;
+    }
+
+    setRowState((prev) => ({ ...prev, [reg.id]: { kind: "working", action: "admit-card" } }));
+
+    try {
+      const updated = await uploadAdmitCard(reg.id, file);
+      setRegistrations((prev) =>
+        prev.map((row) =>
+          row.id === reg.id
+            ? { ...row, admit_card_url: updated.admit_card_url ?? row.admit_card_url ?? "" }
+            : row,
+        ),
+      );
+      setRowState((prev) => {
+        const next = { ...prev };
+        delete next[reg.id];
+        return next;
+      });
+      setNotice(`Admit card uploaded for ${registrationStudentName(reg)}.`);
+    } catch (err) {
+      setRowState((prev) => ({ ...prev, [reg.id]: { kind: "idle" } }));
+      setActionError(
+        err instanceof ApiError
+          ? err.status === 403
+            ? "Your account does not have admin access for this action."
+            : err.status === 409
+              ? "An admit card can only be uploaded for an approved registration."
+              : err.message
           : "Something went wrong. Please try again.",
       );
     }
@@ -301,6 +348,49 @@ function ExamRegistrationsContent() {
                             >
                               Un-reject
                             </Button>
+                          ) : reg.status === "approved" ? (
+                            <>
+                              {reg.admit_card_url && (
+                                <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium text-emerald-700">
+                                  <svg
+                                    className="h-4 w-4 shrink-0"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                  Admit card uploaded
+                                </span>
+                              )}
+                              <input
+                                ref={(el) => {
+                                  fileInputs.current[reg.id] = el;
+                                }}
+                                type="file"
+                                accept="application/pdf,.pdf"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  e.target.value = "";
+                                  if (file) sendAdmitCard(reg, file);
+                                }}
+                              />
+                              <Button
+                                className="shrink-0 whitespace-nowrap"
+                                variant={reg.admit_card_url ? "outline" : "primary"}
+                                size="sm"
+                                loading={working && state.action === "admit-card"}
+                                disabled={working}
+                                onClick={() => fileInputs.current[reg.id]?.click()}
+                              >
+                                {reg.admit_card_url ? "Re-upload" : "Upload Admit Card"}
+                              </Button>
+                            </>
                           ) : (
                             <span className="text-xs text-ink-500">—</span>
                           )}
