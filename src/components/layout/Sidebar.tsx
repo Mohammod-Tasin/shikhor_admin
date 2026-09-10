@@ -31,6 +31,37 @@ const NAV_LINKS: Array<{ href: string; label: string; icon: ReactNode }> = [
     ),
   },
   {
+    href: "/dashboard/important-dates",
+    label: "Important Dates",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]" aria-hidden="true">
+        <rect x="3.5" y="5" width="17" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M3.5 9.5h17M8 3v4M16 3v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path
+          d="m12 13 .9 1.9 2 .3-1.45 1.45.35 2L12 17.7l-1.75.95.35-2L9.1 15.2l2-.3.9-1.9z"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    href: "/dashboard/notices",
+    label: "Notice Board",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]" aria-hidden="true">
+        <path
+          d="M4 9.5 15 5v11l-11-4.5V9.5zM4 11.5H3.5A1.5 1.5 0 0 1 2 10v-.5A1.5 1.5 0 0 1 3.5 8H4M7 12.5V17a1.5 1.5 0 0 0 3 0v-3.3M15 7.5c2 0 3.5 1 3.5 3s-1.5 3-3.5 3"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    ),
+  },
+  {
     href: "/dashboard/verification",
     label: "User Verification",
     icon: (
