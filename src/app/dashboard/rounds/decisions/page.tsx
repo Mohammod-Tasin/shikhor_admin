@@ -136,6 +136,18 @@ function RoundDecisionsContent() {
     if (!roundId) return;
     setActionError(null);
     setNotice(null);
+
+    const missing = candidates.filter((c) => !selection[c.user_id]);
+    if (missing.length > 0) {
+      const names = missing.map((c) => candidateName(c));
+      const preview =
+        names.length > 15 ? `${names.slice(0, 15).join(", ")}, and ${names.length - 15} more` : names.join(", ");
+      setActionError(
+        `Missing a decision for ${missing.length} candidate${missing.length === 1 ? "" : "s"}: ${preview}.`,
+      );
+      return;
+    }
+
     const decisions = Object.entries(selection).map(([user_id, status]) => ({ user_id, status }));
     if (decisions.length === 0) {
       setActionError("Select a decision for at least one candidate.");
