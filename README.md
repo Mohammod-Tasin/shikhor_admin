@@ -1,6 +1,6 @@
-# OlympiadNext Admin
+# Shikhor Admin
 
-Standalone Next.js (App Router) admin console for the OlympiadNext platform.
+Standalone Next.js (App Router) admin console for the Shikhor platform.
 Consumes the Go backend's `/api/admin/*` and `/api/auth/*` surfaces.
 
 ## Running

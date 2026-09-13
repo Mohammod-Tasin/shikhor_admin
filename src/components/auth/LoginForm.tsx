@@ -35,7 +35,7 @@ export function LoginForm() {
         <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-lg font-bold text-white">
           O
         </div>
-        <h1 className="text-xl font-semibold text-ink-900">OlympiadNext Admin</h1>
+        <h1 className="text-xl font-semibold text-ink-900">Shikhor Admin</h1>
         <p className="mt-1 text-sm text-ink-500">Sign in to manage the platform.</p>
       </div>
 
