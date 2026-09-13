@@ -9,6 +9,9 @@ export interface RoundRequest {
   round_name: string;
   start_at: string;
   duration_minutes: number;
+  /** Marks this as the event's one final round. The backend rejects a
+   * second one for the same event with a 400. */
+  is_final: boolean;
 }
 
 /**
@@ -27,6 +30,7 @@ export interface RoundResponse {
   start_at: string;
   duration_minutes: number;
   status: RoundStatus;
+  is_final: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -48,12 +52,17 @@ export interface CandidateResponse {
   full_name?: string | null;
   email: string;
   existing_status?: ParticipantStatus | null;
+  /** Set alongside existing_status only when it is "winner", letting the
+   * UI pre-fill rank when re-opening an already-decided final round. */
+  existing_rank?: number;
 }
 
-/** One element of the bare-array body for `PUT /api/admin/rounds/{id}/participants`. */
+/** One element of the bare-array body for `PUT /api/admin/rounds/{id}/participants`.
+ * The backend requires rank when status is "winner" and rejects it otherwise. */
 export interface ParticipantDecision {
   user_id: string;
   status: ParticipantStatus;
+  rank?: number;
 }
 
 /** Best-effort display name for a round candidate. */

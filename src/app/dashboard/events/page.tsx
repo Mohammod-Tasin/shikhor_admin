@@ -98,6 +98,13 @@ export default function EventsManagementPage() {
                 >
                   Manage Rounds
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/dashboard/prizes?event_id=${encodeURIComponent(event.id)}`)}
+                >
+                  Manage Prizes
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => setMode({ kind: "edit" })}>
                   Edit
                 </Button>

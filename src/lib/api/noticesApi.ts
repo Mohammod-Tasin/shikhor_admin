@@ -6,13 +6,13 @@ import type { NoticeRequest, NoticeResponse } from "@/types/notice";
  * `Authorization: Bearer <token>` header is attached automatically by
  * `apiFetch`; the route is gated by the backend's admin middleware.
  *
- * Tolerates either a bare array or a `{ data: [...] }` envelope, matching the
- * other admin list endpoints (`adminApi.ts`, `registrationsApi.ts`).
+ * The backend wraps the list as `{ notices: [...], count: N }`
+ * (`dto.NoticeListResponse`), mirroring how `roundsApi.ts`'s `listRounds`
+ * unwraps `{ rounds, count }`.
  */
 export async function getNotices(): Promise<NoticeResponse[]> {
-  const res = await apiFetch<unknown>("/api/admin/notices");
-  if (Array.isArray(res)) return res as NoticeResponse[];
-  return (res as { data?: NoticeResponse[] })?.data ?? [];
+  const res = await apiFetch<{ notices: NoticeResponse[]; count: number }>("/api/admin/notices");
+  return res.notices ?? [];
 }
 
 /** `POST /api/admin/notices`. Bearer token attached automatically. */

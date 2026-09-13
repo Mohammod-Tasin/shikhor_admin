@@ -8,12 +8,30 @@ import { getCandidates, listRounds, setParticipants } from "@/lib/api/roundsApi"
 import { candidateName, type CandidateResponse, type ParticipantStatus } from "@/types/round";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 
 const DECISION_LABEL: Record<ParticipantStatus, string> = {
   qualified: "Qualify",
   eliminated: "Eliminate",
   winner: "Winner",
 };
+
+/** One row's pending decision. Rank is only meaningful (and only ever
+ * sent to the backend) when status is "winner". */
+interface Decision {
+  status: ParticipantStatus;
+  rank?: number;
+}
+
+function isPositiveInt(n: number | undefined): n is number {
+  return typeof n === "number" && Number.isInteger(n) && n > 0;
+}
+
+/** Matches the "missing decision" banner's existing truncation so a long
+ * candidate list never blows up the error banner. */
+function previewNames(names: string[]): string {
+  return names.length > 15 ? `${names.slice(0, 15).join(", ")}, and ${names.length - 15} more` : names.join(", ");
+}
 
 export default function RoundDecisionsPage() {
   return (
@@ -33,7 +51,7 @@ function RoundDecisionsContent() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [selection, setSelection] = useState<Record<string, ParticipantStatus>>({});
+  const [selection, setSelection] = useState<Record<string, Decision>>({});
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -52,15 +70,14 @@ function RoundDecisionsContent() {
         const [rows, allRounds] = await Promise.all([getCandidates(roundId), listRounds(eventId)]);
         if (cancelled) return;
         setCandidates(rows);
-        const initial: Record<string, ParticipantStatus> = {};
+        const initial: Record<string, Decision> = {};
         for (const c of rows) {
-          if (c.existing_status) initial[c.user_id] = c.existing_status;
+          if (c.existing_status) initial[c.user_id] = { status: c.existing_status, rank: c.existing_rank };
         }
         setSelection(initial);
 
         const thisRound = allRounds.find((r) => r.id === roundId);
-        const maxOrder = allRounds.reduce((max, r) => Math.max(max, r.round_order), 0);
-        setIsFinalRound(Boolean(thisRound && thisRound.round_order === maxOrder));
+        setIsFinalRound(Boolean(thisRound?.is_final));
       } catch (err) {
         if (!cancelled) {
           setLoadError(
@@ -107,8 +124,17 @@ function RoundDecisionsContent() {
     );
   }
 
+  function nameFor(userId: string): string {
+    const c = candidates.find((c) => c.user_id === userId);
+    return c ? candidateName(c) : userId;
+  }
+
   function setRowStatus(userId: string, status: ParticipantStatus) {
-    setSelection((prev) => ({ ...prev, [userId]: status }));
+    setSelection((prev) => ({ ...prev, [userId]: { ...prev[userId], status } }));
+  }
+
+  function setRowRank(userId: string, rank: number | undefined) {
+    setSelection((prev) => ({ ...prev, [userId]: { ...prev[userId], rank } }));
   }
 
   function toggleChecked(userId: string) {
@@ -127,7 +153,7 @@ function RoundDecisionsContent() {
   function bulkApply(status: ParticipantStatus) {
     setSelection((prev) => {
       const next = { ...prev };
-      for (const userId of checked) next[userId] = status;
+      for (const userId of checked) next[userId] = { ...next[userId], status };
       return next;
     });
   }
@@ -140,15 +166,41 @@ function RoundDecisionsContent() {
     const missing = candidates.filter((c) => !selection[c.user_id]);
     if (missing.length > 0) {
       const names = missing.map((c) => candidateName(c));
-      const preview =
-        names.length > 15 ? `${names.slice(0, 15).join(", ")}, and ${names.length - 15} more` : names.join(", ");
       setActionError(
-        `Missing a decision for ${missing.length} candidate${missing.length === 1 ? "" : "s"}: ${preview}.`,
+        `Missing a decision for ${missing.length} candidate${missing.length === 1 ? "" : "s"}: ${previewNames(names)}.`,
       );
       return;
     }
 
-    const decisions = Object.entries(selection).map(([user_id, status]) => ({ user_id, status }));
+    const entries = Object.entries(selection);
+
+    const winnersWithoutRank = entries.filter(([, d]) => d.status === "winner" && !isPositiveInt(d.rank));
+    if (winnersWithoutRank.length > 0) {
+      const names = winnersWithoutRank.map(([userId]) => nameFor(userId));
+      setActionError(
+        `Enter a rank (a positive whole number) for ${winnersWithoutRank.length} winner${winnersWithoutRank.length === 1 ? "" : "s"}: ${previewNames(names)}.`,
+      );
+      return;
+    }
+
+    const rankToNames = new Map<number, string[]>();
+    for (const [userId, d] of entries) {
+      if (d.status === "winner" && isPositiveInt(d.rank)) {
+        const names = rankToNames.get(d.rank) ?? [];
+        names.push(nameFor(userId));
+        rankToNames.set(d.rank, names);
+      }
+    }
+    const duplicateRanks = [...rankToNames.entries()].filter(([, names]) => names.length > 1);
+    if (duplicateRanks.length > 0) {
+      const desc = duplicateRanks.map(([rank, names]) => `rank ${rank} (${names.join(", ")})`).join("; ");
+      setActionError(`Each winner needs a unique rank — duplicate: ${desc}.`);
+      return;
+    }
+
+    const decisions = entries.map(([user_id, d]) =>
+      d.status === "winner" ? { user_id, status: d.status, rank: d.rank } : { user_id, status: d.status },
+    );
     if (decisions.length === 0) {
       setActionError("Select a decision for at least one candidate.");
       return;
@@ -275,23 +327,40 @@ function RoundDecisionsContent() {
                         <td className="px-6 py-4 font-medium text-ink-900">{candidateName(c)}</td>
                         <td className="px-6 py-4 text-ink-700">{c.email}</td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center justify-end gap-2">
-                            {availableStatuses.map((status) => (
-                              <Button
-                                key={status}
-                                variant={
-                                  current === status
-                                    ? status === "eliminated"
-                                      ? "danger"
-                                      : "primary"
-                                    : "outline"
-                                }
-                                size="sm"
-                                onClick={() => setRowStatus(c.user_id, status)}
-                              >
-                                {DECISION_LABEL[status]}
-                              </Button>
-                            ))}
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="flex items-center justify-end gap-2">
+                              {availableStatuses.map((status) => (
+                                <Button
+                                  key={status}
+                                  variant={
+                                    current?.status === status
+                                      ? status === "eliminated"
+                                        ? "danger"
+                                        : "primary"
+                                      : "outline"
+                                  }
+                                  size="sm"
+                                  onClick={() => setRowStatus(c.user_id, status)}
+                                >
+                                  {DECISION_LABEL[status]}
+                                </Button>
+                              ))}
+                            </div>
+                            {current?.status === "winner" && (
+                              <Input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={current.rank ?? ""}
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  setRowRank(c.user_id, raw === "" ? undefined : Number(raw));
+                                }}
+                                placeholder="Rank"
+                                aria-label={`Rank for ${candidateName(c)}`}
+                                className="w-20 text-right"
+                              />
+                            )}
                           </div>
                         </td>
                       </tr>

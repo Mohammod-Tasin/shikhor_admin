@@ -6,13 +6,15 @@ import type { ImportantDateRequest, ImportantDateResponse } from "@/types/import
  * `Authorization: Bearer <token>` header is attached automatically by
  * `apiFetch`; the route is gated by the backend's admin middleware.
  *
- * Tolerates either a bare array or a `{ data: [...] }` envelope, matching the
- * other admin list endpoints (`adminApi.ts`, `registrationsApi.ts`).
+ * The backend wraps the list as `{ important_dates: [...], count: N }`
+ * (`dto.ImportantDateListResponse`), mirroring how `roundsApi.ts`'s
+ * `listRounds` unwraps `{ rounds, count }`.
  */
 export async function getImportantDates(): Promise<ImportantDateResponse[]> {
-  const res = await apiFetch<unknown>("/api/admin/important-dates");
-  if (Array.isArray(res)) return res as ImportantDateResponse[];
-  return (res as { data?: ImportantDateResponse[] })?.data ?? [];
+  const res = await apiFetch<{ important_dates: ImportantDateResponse[]; count: number }>(
+    "/api/admin/important-dates",
+  );
+  return res.important_dates ?? [];
 }
 
 /** `POST /api/admin/important-dates`. Bearer token attached automatically. */
