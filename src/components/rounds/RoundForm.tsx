@@ -7,6 +7,7 @@ import { datetimeLocalToISO, isoToDatetimeLocal } from "@/lib/utils/datetime";
 import type { RoundRequest, RoundResponse } from "@/types/round";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Toggle } from "@/components/ui/Toggle";
 
 interface RoundFormProps {
   eventId: string;
@@ -39,6 +40,7 @@ export function RoundForm({ eventId, round, siblingOrders, onSuccess }: RoundFor
   const [roundOrder, setRoundOrder] = useState(
     round?.round_order != null ? String(round.round_order) : "",
   );
+  const [isFinal, setIsFinal] = useState<boolean>(round?.is_final ?? false);
   const [gapWarningDismissed, setGapWarningDismissed] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -99,6 +101,7 @@ export function RoundForm({ eventId, round, siblingOrders, onSuccess }: RoundFor
         round_name: roundName.trim(),
         start_at: startAtISO,
         duration_minutes: Number(durationMinutes),
+        is_final: isFinal,
       };
 
       const result =
@@ -187,6 +190,15 @@ export function RoundForm({ eventId, round, siblingOrders, onSuccess }: RoundFor
         onChange={(e) => setDurationMinutes(e.target.value)}
         placeholder="60"
       />
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+        <Toggle
+          checked={isFinal}
+          onChange={setIsFinal}
+          label="Final Round"
+          description="Winners are ranked on the final round. Only one round per event can be marked final."
+        />
+      </div>
 
       {formError && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
