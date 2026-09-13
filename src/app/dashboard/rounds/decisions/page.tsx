@@ -33,6 +33,25 @@ function previewNames(names: string[]): string {
   return names.length > 15 ? `${names.slice(0, 15).join(", ")}, and ${names.length - 15} more` : names.join(", ");
 }
 
+// Mirrors dashboard/rounds/page.tsx's and dashboard/prizes/page.tsx's own
+// LevelBadge — shown here so a mis-click between two similarly-ordered
+// rounds of different levels can't go unnoticed while deciding winners.
+const LEVEL_BADGE: Record<string, string> = {
+  Junior: "bg-sky-100 text-sky-700",
+  Secondary: "bg-violet-100 text-violet-700",
+  "Higher Secondary": "bg-rose-100 text-rose-700",
+};
+
+function LevelBadge({ level }: { level: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${LEVEL_BADGE[level] ?? "bg-slate-100 text-slate-700"}`}
+    >
+      {level}
+    </span>
+  );
+}
+
 export default function RoundDecisionsPage() {
   return (
     <Suspense fallback={<p className="text-sm text-ink-500">Loading…</p>}>
@@ -48,6 +67,8 @@ function RoundDecisionsContent() {
 
   const [candidates, setCandidates] = useState<CandidateResponse[]>([]);
   const [isFinalRound, setIsFinalRound] = useState(false);
+  const [roundName, setRoundName] = useState<string | null>(null);
+  const [roundLevel, setRoundLevel] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -78,6 +99,8 @@ function RoundDecisionsContent() {
 
         const thisRound = allRounds.find((r) => r.id === roundId);
         setIsFinalRound(Boolean(thisRound?.is_final));
+        setRoundName(thisRound?.round_name ?? null);
+        setRoundLevel(thisRound?.level ?? null);
       } catch (err) {
         if (!cancelled) {
           setLoadError(
@@ -231,6 +254,12 @@ function RoundDecisionsContent() {
             Rounds Management
           </p>
           <h1 className="mt-1 text-2xl font-semibold text-ink-900">Participant decisions</h1>
+          {(roundName || roundLevel) && (
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-sm font-medium text-ink-900">
+              {roundName}
+              {roundLevel && <LevelBadge level={roundLevel} />}
+            </p>
+          )}
           <p className="mt-1 text-sm text-ink-500">
             Qualify or eliminate each candidate{isFinalRound ? ", or mark the event winner." : "."}
           </p>

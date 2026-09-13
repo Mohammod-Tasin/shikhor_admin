@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
 import { deletePrize, listPrizes } from "@/lib/api/prizesApi";
+import { LEVEL_OPTIONS } from "@/lib/constants/academic";
 import type { PrizeResponse } from "@/types/prize";
 import { PrizeForm } from "@/components/prizes/PrizeForm";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
@@ -12,6 +13,29 @@ import { Button } from "@/components/ui/Button";
 
 type Mode = { kind: "list" } | { kind: "create" } | { kind: "edit"; row: PrizeResponse };
 type RowState = { kind: "idle" } | { kind: "deleting" };
+type LevelFilter = "all" | string;
+
+const LEVEL_FILTERS: LevelFilter[] = ["all", ...LEVEL_OPTIONS.map((option) => option.value)];
+
+// Rank ranges can legitimately repeat across levels now (two different
+// "1st place" rows for two different levels), so a level badge on every
+// row is essential to avoid confusion regardless of which filter tab is
+// active.
+const LEVEL_BADGE: Record<string, string> = {
+  Junior: "bg-sky-100 text-sky-700",
+  Secondary: "bg-violet-100 text-violet-700",
+  "Higher Secondary": "bg-rose-100 text-rose-700",
+};
+
+function LevelBadge({ level }: { level: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${LEVEL_BADGE[level] ?? "bg-slate-100 text-slate-700"}`}
+    >
+      {level}
+    </span>
+  );
+}
 
 function sortByRankFrom(rows: PrizeResponse[]): PrizeResponse[] {
   return [...rows].sort((a, b) => a.rank_from - b.rank_from);
@@ -41,6 +65,7 @@ function PrizesContent() {
   const [rowState, setRowState] = useState<Record<string, RowState>>({});
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
 
   useEffect(() => {
     if (!eventId) {
@@ -88,6 +113,8 @@ function PrizesContent() {
       </div>
     );
   }
+
+  const filteredRows = levelFilter === "all" ? rows : rows.filter((r) => r.level === levelFilter);
 
   function handleSuccess(saved: PrizeResponse) {
     setRows((prev) =>
@@ -160,9 +187,27 @@ function PrizesContent() {
 
       {mode.kind === "list" ? (
         <Card>
-          <CardHeader className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink-900">All prizes</h2>
-            <span className="text-xs text-ink-500">{loading ? "…" : `${rows.length} total`}</span>
+          <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-ink-900">All prizes</h2>
+              <span className="text-xs text-ink-500">
+                {loading ? "…" : `${filteredRows.length} ${levelFilter === "all" ? "total" : "shown"}`}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Level">
+              {LEVEL_FILTERS.map((lvl) => (
+                <Button
+                  key={lvl}
+                  role="tab"
+                  aria-selected={levelFilter === lvl}
+                  variant={levelFilter === lvl ? "primary" : "outline"}
+                  size="sm"
+                  onClick={() => setLevelFilter(lvl)}
+                >
+                  {lvl === "all" ? "All" : lvl}
+                </Button>
+              ))}
+            </div>
           </CardHeader>
           {loading ? (
             <CardContent>
@@ -172,26 +217,32 @@ function PrizesContent() {
             <CardContent>
               <p className="text-sm text-red-600">{loadError}</p>
             </CardContent>
-          ) : rows.length === 0 ? (
+          ) : filteredRows.length === 0 ? (
             <CardContent>
-              <p className="text-sm text-ink-500">No prizes configured yet for this event.</p>
+              <p className="text-sm text-ink-500">
+                {rows.length === 0 ? "No prizes configured yet for this event." : "No prizes for this level yet."}
+              </p>
             </CardContent>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-ink-500">
+                    <th className="px-6 py-3 font-medium">Level</th>
                     <th className="px-6 py-3 font-medium">Rank</th>
                     <th className="px-6 py-3 font-medium">Prize</th>
                     <th className="px-6 py-3 text-right font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => {
+                  {filteredRows.map((row) => {
                     const state = rowState[row.id] ?? { kind: "idle" };
                     const deleting = state.kind === "deleting";
                     return (
                       <tr key={row.id} className="border-b border-slate-100 align-top last:border-0">
+                        <td className="px-6 py-4">
+                          <LevelBadge level={row.level} />
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap font-medium text-ink-900">
                           {rankLabel(row)}
                         </td>

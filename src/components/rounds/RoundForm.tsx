@@ -4,9 +4,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ApiError } from "@/lib/api/client";
 import { createRound, updateRound } from "@/lib/api/roundsApi";
 import { datetimeLocalToISO, isoToDatetimeLocal } from "@/lib/utils/datetime";
+import { LEVEL_OPTIONS } from "@/lib/constants/academic";
 import type { RoundRequest, RoundResponse } from "@/types/round";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Toggle } from "@/components/ui/Toggle";
 
 interface RoundFormProps {
@@ -14,11 +16,13 @@ interface RoundFormProps {
   /** When provided, the form edits this round via PUT; otherwise it creates one via POST. */
   round?: RoundResponse | null;
   /**
-   * round_order values already used by this event's other rounds (excluding
-   * the one being edited), used only for the client-side contiguity warning
-   * below — the backend does not enforce or need this.
+   * This event's other rounds (excluding the one being edited), across all
+   * levels. Used only for the client-side contiguity warning below — the
+   * backend does not enforce or need this. Filtered down to the currently
+   * selected level's own round_order sequence, since each level now has
+   * its own independent sequence.
    */
-  siblingOrders: number[];
+  siblingRounds: RoundResponse[];
   onSuccess: (round: RoundResponse) => void;
 }
 
@@ -27,9 +31,10 @@ interface FieldErrors {
   start_at?: string;
   duration_minutes?: string;
   round_order?: string;
+  level?: string;
 }
 
-export function RoundForm({ eventId, round, siblingOrders, onSuccess }: RoundFormProps) {
+export function RoundForm({ eventId, round, siblingRounds, onSuccess }: RoundFormProps) {
   const isEditing = Boolean(round);
 
   const [roundName, setRoundName] = useState(round?.round_name ?? "");
@@ -41,12 +46,20 @@ export function RoundForm({ eventId, round, siblingOrders, onSuccess }: RoundFor
     round?.round_order != null ? String(round.round_order) : "",
   );
   const [isFinal, setIsFinal] = useState<boolean>(round?.is_final ?? false);
+  // No default — an explicit choice is required, since level determines
+  // which round_order sequence this round belongs to.
+  const [level, setLevel] = useState(round?.level ?? "");
   const [gapWarningDismissed, setGapWarningDismissed] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+
+  // Sibling round_order values within the currently selected level only —
+  // each level has its own independent 1, 2, 3… sequence, so a round 2 in
+  // "Secondary" says nothing about gaps in "Junior".
+  const siblingOrders = siblingRounds.filter((r) => r.level === level).map((r) => r.round_order);
 
   // A gap (e.g. order 3 saved before order 2 exists) permanently locks every
   // later round out, since round N looks up round N-1 by exact round_order.
@@ -60,7 +73,7 @@ export function RoundForm({ eventId, round, siblingOrders, onSuccess }: RoundFor
 
   useEffect(() => {
     setGapWarningDismissed(false);
-  }, [roundOrder]);
+  }, [roundOrder, level]);
 
   function validate(): FieldErrors {
     const errors: FieldErrors = {};
@@ -74,6 +87,7 @@ export function RoundForm({ eventId, round, siblingOrders, onSuccess }: RoundFor
     if (!Number.isInteger(order) || order <= 0) {
       errors.round_order = "Enter a whole number (1 or more).";
     }
+    if (!level) errors.level = "Level is required.";
     return errors;
   }
 
@@ -102,6 +116,7 @@ export function RoundForm({ eventId, round, siblingOrders, onSuccess }: RoundFor
         start_at: startAtISO,
         duration_minutes: Number(durationMinutes),
         is_final: isFinal,
+        level,
       };
 
       const result =
@@ -138,23 +153,43 @@ export function RoundForm({ eventId, round, siblingOrders, onSuccess }: RoundFor
         placeholder="Qualifying round"
       />
 
-      <Input
-        id="round_order"
-        label="Round order"
-        type="number"
-        min={1}
-        step={1}
-        required
-        value={roundOrder}
-        error={fieldErrors.round_order}
-        onChange={(e) => setRoundOrder(e.target.value)}
-        hint="Position in the event's sequence — 1, 2, 3…"
-      />
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <Select
+          id="level"
+          label="Level"
+          required
+          value={level}
+          error={fieldErrors.level}
+          onChange={(e) => setLevel(e.target.value)}
+        >
+          <option value="" disabled>
+            Select a level
+          </option>
+          {LEVEL_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+
+        <Input
+          id="round_order"
+          label="Round order"
+          type="number"
+          min={1}
+          step={1}
+          required
+          value={roundOrder}
+          error={fieldErrors.round_order}
+          onChange={(e) => setRoundOrder(e.target.value)}
+          hint="Position within this level's own sequence — 1, 2, 3…"
+        />
+      </div>
 
       {hasGap && !gapWarningDismissed && (
         <div className="flex items-start justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
           <p>
-            Round order {orderNum} has no round {orderNum - 1} yet for this event. This will make
+            Round order {orderNum} has no round {orderNum - 1} yet for this level. This will make
             every round after the gap permanently unenterable until it&apos;s filled.
           </p>
           <button
@@ -196,7 +231,7 @@ export function RoundForm({ eventId, round, siblingOrders, onSuccess }: RoundFor
           checked={isFinal}
           onChange={setIsFinal}
           label="Final Round"
-          description="Winners are ranked on the final round. Only one round per event can be marked final."
+          description="Winners are ranked on the final round. Only one round per level per event can be marked final."
         />
       </div>
 
