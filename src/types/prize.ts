@@ -4,13 +4,17 @@
  * (`PUT /api/admin/events/{eventId}/prizes/{id}`). `rank_from`/`rank_to`
  * form an inclusive placement range (e.g. 1-1 for "1st place", 2-3 for
  * "2nd-3rd place"). The backend rejects `rank_from > rank_to` and any
- * range that overlaps another prize tier for the same event.
+ * range that overlaps another prize tier for the same (event, level).
  */
 export interface PrizeRequest {
   rank_from: number;
   rank_to: number;
   prize_name: string;
   prize_description?: string;
+  /** One of "Junior", "Secondary", "Higher Secondary" — the same enum
+   * users.level enforces. Two different levels may configure identical or
+   * overlapping rank ranges without conflict. */
+  level: string;
 }
 
 /** Mirrors the Go backend's prize response — identical on the admin and
@@ -23,6 +27,7 @@ export interface PrizeResponse {
   rank_to: number;
   prize_name: string;
   prize_description?: string;
+  level: string;
   created_at: string;
   updated_at: string;
 }

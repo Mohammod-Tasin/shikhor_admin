@@ -3,9 +3,11 @@
 import { useState, type FormEvent } from "react";
 import { ApiError } from "@/lib/api/client";
 import { createPrize, updatePrize } from "@/lib/api/prizesApi";
+import { LEVEL_OPTIONS } from "@/lib/constants/academic";
 import type { PrizeRequest, PrizeResponse } from "@/types/prize";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 
 interface PrizeFormProps {
@@ -19,6 +21,7 @@ interface FieldErrors {
   rank_from?: string;
   rank_to?: string;
   prize_name?: string;
+  level?: string;
 }
 
 export function PrizeForm({ eventId, prize, onSuccess }: PrizeFormProps) {
@@ -28,6 +31,9 @@ export function PrizeForm({ eventId, prize, onSuccess }: PrizeFormProps) {
   const [rankTo, setRankTo] = useState(prize?.rank_to != null ? String(prize.rank_to) : "");
   const [prizeName, setPrizeName] = useState(prize?.prize_name ?? "");
   const [prizeDescription, setPrizeDescription] = useState(prize?.prize_description ?? "");
+  // No default — an explicit choice is required, since overlap validation
+  // and rank ranges are scoped per level.
+  const [level, setLevel] = useState(prize?.level ?? "");
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -53,6 +59,7 @@ export function PrizeForm({ eventId, prize, onSuccess }: PrizeFormProps) {
       errors.rank_to = "Rank to must be greater than or equal to rank from.";
     }
     if (!prizeName.trim()) errors.prize_name = "Prize name is required.";
+    if (!level) errors.level = "Level is required.";
     return errors;
   }
 
@@ -71,6 +78,7 @@ export function PrizeForm({ eventId, prize, onSuccess }: PrizeFormProps) {
         rank_from: Number(rankFrom),
         rank_to: Number(rankTo),
         prize_name: prizeName.trim(),
+        level,
       };
       if (prizeDescription.trim()) payload.prize_description = prizeDescription.trim();
 
@@ -98,6 +106,24 @@ export function PrizeForm({ eventId, prize, onSuccess }: PrizeFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <Select
+        id="level"
+        label="Level"
+        required
+        value={level}
+        error={fieldErrors.level}
+        onChange={(e) => setLevel(e.target.value)}
+      >
+        <option value="" disabled>
+          Select a level
+        </option>
+        {LEVEL_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </Select>
+
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <Input
           id="rank_from"

@@ -9,9 +9,13 @@ export interface RoundRequest {
   round_name: string;
   start_at: string;
   duration_minutes: number;
-  /** Marks this as the event's one final round. The backend rejects a
-   * second one for the same event with a 400. */
+  /** Marks this as the event's one final round for its level. The backend
+   * rejects a second one for the same (event, level) pair with a 400. */
   is_final: boolean;
+  /** One of "Junior", "Secondary", "Higher Secondary" — the same enum
+   * users.level enforces. Each level has its own independent round_order
+   * sequence and its own final round within one event. */
+  level: string;
 }
 
 /**
@@ -31,6 +35,7 @@ export interface RoundResponse {
   duration_minutes: number;
   status: RoundStatus;
   is_final: boolean;
+  level: string;
   created_at: string;
   updated_at: string;
 }

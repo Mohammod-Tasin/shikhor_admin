@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
 import { deleteRound, endRound, listRounds, startRound } from "@/lib/api/roundsApi";
+import { LEVEL_OPTIONS } from "@/lib/constants/academic";
 import type { RoundResponse, RoundStatus } from "@/types/round";
 import { RoundForm } from "@/components/rounds/RoundForm";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
@@ -13,6 +14,9 @@ import { Button } from "@/components/ui/Button";
 type Mode = { kind: "list" } | { kind: "create" } | { kind: "edit"; row: RoundResponse };
 type RowAction = "start" | "end" | "delete";
 type RowState = { kind: "idle" } | { kind: "working"; action: RowAction };
+type LevelFilter = "all" | string;
+
+const LEVEL_FILTERS: LevelFilter[] = ["all", ...LEVEL_OPTIONS.map((option) => option.value)];
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -32,6 +36,26 @@ function StatusBadge({ status }: { status: RoundStatus }) {
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${STATUS_BADGE[status]}`}
     >
       {status}
+    </span>
+  );
+}
+
+// An event can now have up to 3x as many rounds (a full sequence per
+// level), so a level badge on every row is essential regardless of which
+// filter tab is active — it's never ambiguous which level a round belongs
+// to just from its round_order/name alone.
+const LEVEL_BADGE: Record<string, string> = {
+  Junior: "bg-sky-100 text-sky-700",
+  Secondary: "bg-violet-100 text-violet-700",
+  "Higher Secondary": "bg-rose-100 text-rose-700",
+};
+
+function LevelBadge({ level }: { level: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${LEVEL_BADGE[level] ?? "bg-slate-100 text-slate-700"}`}
+    >
+      {level}
     </span>
   );
 }
@@ -61,6 +85,7 @@ function RoundsContent() {
   const [rowState, setRowState] = useState<Record<string, RowState>>({});
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
 
   useEffect(() => {
     if (!eventId) {
@@ -178,9 +203,12 @@ function RoundsContent() {
     return "Something went wrong. Please try again.";
   }
 
-  const siblingOrders = (mode.kind === "edit" ? rows.filter((r) => r.id !== mode.row.id) : rows).map(
-    (r) => r.round_order,
-  );
+  // The form filters this down to the level it currently has selected —
+  // pass every other round regardless of the list page's own level filter,
+  // since that filter is just a display concern.
+  const siblingRounds = mode.kind === "edit" ? rows.filter((r) => r.id !== mode.row.id) : rows;
+
+  const filteredRows = levelFilter === "all" ? rows : rows.filter((r) => r.level === levelFilter);
 
   return (
     <div>
@@ -214,9 +242,27 @@ function RoundsContent() {
 
       {mode.kind === "list" ? (
         <Card>
-          <CardHeader className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-ink-900">All rounds</h2>
-            <span className="text-xs text-ink-500">{loading ? "…" : `${rows.length} total`}</span>
+          <CardHeader className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-ink-900">All rounds</h2>
+              <span className="text-xs text-ink-500">
+                {loading ? "…" : `${filteredRows.length} ${levelFilter === "all" ? "total" : "shown"}`}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2" role="tablist" aria-label="Level">
+              {LEVEL_FILTERS.map((lvl) => (
+                <Button
+                  key={lvl}
+                  role="tab"
+                  aria-selected={levelFilter === lvl}
+                  variant={levelFilter === lvl ? "primary" : "outline"}
+                  size="sm"
+                  onClick={() => setLevelFilter(lvl)}
+                >
+                  {lvl === "all" ? "All" : lvl}
+                </Button>
+              ))}
+            </div>
           </CardHeader>
           {loading ? (
             <CardContent>
@@ -226,15 +272,18 @@ function RoundsContent() {
             <CardContent>
               <p className="text-sm text-red-600">{loadError}</p>
             </CardContent>
-          ) : rows.length === 0 ? (
+          ) : filteredRows.length === 0 ? (
             <CardContent>
-              <p className="text-sm text-ink-500">No rounds yet for this event.</p>
+              <p className="text-sm text-ink-500">
+                {rows.length === 0 ? "No rounds yet for this event." : "No rounds for this level yet."}
+              </p>
             </CardContent>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-ink-500">
+                    <th className="px-6 py-3 font-medium">Level</th>
                     <th className="px-6 py-3 font-medium">Order</th>
                     <th className="px-6 py-3 font-medium">Round name</th>
                     <th className="px-6 py-3 font-medium">Start</th>
@@ -244,11 +293,14 @@ function RoundsContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => {
+                  {filteredRows.map((row) => {
                     const state = rowState[row.id] ?? { kind: "idle" };
                     const working = state.kind === "working";
                     return (
                       <tr key={row.id} className="border-b border-slate-100 align-top last:border-0">
+                        <td className="px-6 py-4">
+                          <LevelBadge level={row.level} />
+                        </td>
                         <td className="px-6 py-4 text-ink-700">{row.round_order}</td>
                         <td className="px-6 py-4 font-medium text-ink-900">{row.round_name}</td>
                         <td className="px-6 py-4 text-ink-700">{formatDate(row.start_at)}</td>
@@ -335,7 +387,7 @@ function RoundsContent() {
             <RoundForm
               eventId={eventId}
               round={mode.kind === "edit" ? mode.row : null}
-              siblingOrders={siblingOrders}
+              siblingRounds={siblingRounds}
               onSuccess={handleSuccess}
             />
           </CardContent>
