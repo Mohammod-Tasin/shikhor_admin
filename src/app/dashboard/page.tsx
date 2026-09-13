@@ -47,7 +47,7 @@ export default function OverviewPage() {
           Welcome back{user?.email ? `, ${user.email}` : ""}
         </h1>
         <p className="mt-1 text-sm text-ink-500">
-          Manage platform content for the OlympiadNext client site.
+          Manage platform content for the Shikhor client site.
         </p>
       </header>
 

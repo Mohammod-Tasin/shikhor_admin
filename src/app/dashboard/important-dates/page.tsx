@@ -107,7 +107,7 @@ export default function ImportantDatesPage() {
           </p>
           <h1 className="mt-1 text-2xl font-semibold text-ink-900">Key dates</h1>
           <p className="mt-1 text-sm text-ink-500">
-            Manage the important dates shown on the OlympiadNext client site.
+            Manage the important dates shown on the Shikhor client site.
           </p>
         </div>
         {mode.kind === "list" && (

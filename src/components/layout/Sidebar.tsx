@@ -111,7 +111,7 @@ export function Sidebar() {
           O
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-ink-900">OlympiadNext</p>
+          <p className="truncate text-sm font-semibold text-ink-900">Shikhor</p>
           <p className="truncate text-xs text-ink-500">Admin Console</p>
         </div>
       </div>

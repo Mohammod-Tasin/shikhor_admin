@@ -3,8 +3,8 @@ import { AuthProvider } from "@/lib/auth/AuthProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "OlympiadNext Admin",
-  description: "Admin console for the OlympiadNext platform",
+  title: "Shikhor Admin",
+  description: "Admin console for the Shikhor platform",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

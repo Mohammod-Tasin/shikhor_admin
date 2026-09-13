@@ -96,7 +96,7 @@ export default function NoticesPage() {
           </p>
           <h1 className="mt-1 text-2xl font-semibold text-ink-900">Notices</h1>
           <p className="mt-1 text-sm text-ink-500">
-            Manage the notices shown on the OlympiadNext client site.
+            Manage the notices shown on the Shikhor client site.
           </p>
         </div>
         {mode.kind === "list" && (
